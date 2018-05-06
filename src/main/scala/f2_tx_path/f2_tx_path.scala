@@ -41,14 +41,15 @@ class f2_tx_path_io (
         val users     : Int=4,
         val progdelay : Int=64,
         val finedelay : Int=32,
-        val resolution: Int=32
+        val resolution: Int=32,
+        val weightbits: Int=10
 
     ) extends Bundle {
     val interpolator_clocks   = new f2_interpolator_clocks()
     val interpolator_controls = new f2_interpolator_controls(gainbits=10)
     val dsp_ioctrl            = Input(new tx_path_dsp_ioctrl(outputn=outputn, n=n,
                                         users=users,progdelay=progdelay,
-                                        finedelay=finedelay))
+                                        finedelay=finedelay,weightbits=weightbits))
     val dac_clock       = Input(Clock())
     val clock_symrate = Input(Clock()) 
     val iptr_A        = Input(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
@@ -60,7 +61,8 @@ class f2_tx_path (
         n         : Int=16, 
         users     : Int=4,
         progdelay : Int=64,
-        finedelay : Int=32
+        finedelay : Int=32,
+        weightbits: Int=10
     ) extends Module {
     val io = IO( new f2_tx_path_io(outputn=outputn,users=users,progdelay=progdelay))
     val sigproto= DspComplex(SInt(n.W), SInt(n.W))
@@ -77,7 +79,6 @@ class f2_tx_path (
     (userdelay,io.dsp_ioctrl.user_delays).zipped.map(_.select:=_)
     //Add some modes here if needed
 
-    //val weighted_users=Wire(asTypeOf(io.user_weights))
     val weighted_users=withClock(io.clock_symrate){
         Reg(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
     }
