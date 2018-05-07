@@ -13,8 +13,20 @@ import freechips.rocketchip.util._
 import f2_interpolator._
 import prog_delay._
 
+class segmented (val bin: Int=4, val thermo: Int=5)  extends Bundle {
+    val b =Vec(bin,Bool())
+    val t =Vec(scala.math.pow(2,thermo).toInt-1,Bool())
+}
+
+class dac_io (val bin: Int=4, val thermo: Int=5) extends Bundle {
+    val real=new segmented(bin=bin,thermo=thermo) 
+    val imag=new segmented(bin=bin,thermo=thermo)
+}
+
 class tx_path_dsp_ioctrl (
         val outputn   : Int=9,
+        val bin       : Int=4,
+        val thermo    : Int=5,
         val n         : Int=16,
         val users     : Int=4,
         val weightbits: Int=10,
@@ -36,27 +48,30 @@ class tx_path_dsp_ioctrl (
 
 // How to extract the "resolution" of a type?
 class f2_tx_path_io (
-        val outputn    : Int=9, 
+        val outputn   : Int=9, 
+        val bin       : Int=4,
+        val thermo    : Int=5,
         val n         : Int=16,  
         val users     : Int=4,
         val progdelay : Int=64,
         val finedelay : Int=32,
         val resolution: Int=32,
         val weightbits: Int=10
-
     ) extends Bundle {
     val interpolator_clocks   = new f2_interpolator_clocks()
     val interpolator_controls = new f2_interpolator_controls(gainbits=10)
     val dsp_ioctrl            = Input(new tx_path_dsp_ioctrl(outputn=outputn, n=n,
                                         users=users,progdelay=progdelay,
                                         finedelay=finedelay,weightbits=weightbits))
-    val dac_clock       = Input(Clock())
+    val dac_clock     = Input(Clock())
     val clock_symrate = Input(Clock()) 
     val iptr_A        = Input(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
-    val Z             = Output(DspComplex(SInt(outputn.W), SInt(outputn.W)))
+    val Z             = Output(new dac_io(bin=bin,thermo=thermo)) 
 }
 
 class f2_tx_path (
+        thermo    : Int=5,
+        bin       : Int=4,
         outputn   : Int=9, 
         n         : Int=16, 
         users     : Int=4,
@@ -64,13 +79,14 @@ class f2_tx_path (
         finedelay : Int=32,
         weightbits: Int=10
     ) extends Module {
-    val io = IO( new f2_tx_path_io(outputn=outputn,users=users,progdelay=progdelay))
+    val io = IO( new f2_tx_path_io(thermo=thermo,bin=bin,
+            outputn=outputn,users=users,progdelay=progdelay))
     val sigproto= DspComplex(SInt(n.W), SInt(n.W))
     val sigzero=0.U.asTypeOf(sigproto) 
     //Gives a possibility to tune each user separately
     //even they are currently only one data stream
     val userdelay= withClock(io.clock_symrate){
-        Vec(Seq.fill(users){ 
+        VecInit(Seq.fill(users){ 
                 Module( new prog_delay(sigproto, maxdelay=progdelay)).io
             }
         )
@@ -129,25 +145,13 @@ class f2_tx_path (
          r_lutoutdata.real:=daclut_real.read(r_lutreadaddress.real.asUInt)
          r_lutoutdata.imag:=daclut_imag.read(r_lutreadaddress.imag.asUInt)
      }
-     
-
-     //Fifo for careless IO
-     val dacfifodepth=16
-     val dacfifo = Module (new AsyncQueue(sigproto,depth=dacfifodepth)).io
-     dacfifo.enq.bits:=r_lutoutdata
-     dacfifo.enq_clock:=io.interpolator_clocks.cic3clockfast
-     dacfifo.enq.valid:=true.B
-     dacfifo.enq_reset:=io.dsp_ioctrl.reset_dacfifo
-     dacfifo.deq_reset:=io.dsp_ioctrl.reset_dacfifo
-     dacfifo.deq_clock:=io.dac_clock
-     dacfifo.deq.ready:=true.B
 
      //TX input assignments        
 
     //Output selection wire
     val w_outselect = Wire(sigproto)
     //Default assignment
-    w_outselect:=dacfifo.deq.bits
+    w_outselect:=r_lutoutdata
     when (io.dsp_ioctrl.dac_data_mode===0.U){
         w_outselect:=withClock(io.dac_clock){RegNext(
             io.iptr_A(io.dsp_ioctrl.user_select_index)
@@ -164,12 +168,42 @@ class f2_tx_path (
         w_outselect:=dacdelay.optr_Z
     }.elsewhen (io.dsp_ioctrl.dac_data_mode===6.U){
         w_outselect:=r_lutoutdata
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===7.U){
-        w_outselect:=dacfifo.deq.bits
     }
+
+     val realthermoind=Reg(UInt(thermo.W))
+     val imagthermoind=Reg(UInt(thermo.W))
+     realthermoind:=w_outselect.real(thermo+bin-1,bin)
+     imagthermoind:=w_outselect.imag(thermo+bin-1,bin)
+     //val w_segmented=withClock(io.interpolator_clocks.cic3clockfast){Reg(new dac_io(bin=bin,thermo=thermo))}
+     val w_segmented=Wire(new dac_io(bin=bin,thermo=thermo))
+     w_segmented.real.b:=r_lutoutdata.real(bin-1,0).toBools
+     w_segmented.imag.b:=r_lutoutdata.imag(bin-1,0).toBools
+
+     for (i <- 0 to w_segmented.real.t.getWidth-1){
+        when(realthermoind <= i.asUInt ) {
+            w_segmented.real.t(i):=true.B
+        }.otherwise {
+            w_segmented.real.t(i):=false.B
+        }
+        when(imagthermoind <= i.asUInt ) {
+            w_segmented.imag.t(i):=true.B
+        }.otherwise {
+            w_segmented.imag.t(i):=false.B
+        }
+     }
+     //Fifo for careless IO
+     val dacfifodepth=16
+     val fifoproto=new dac_io(bin=bin,thermo=thermo)
+     val dacfifo = Module (new AsyncQueue(fifoproto,depth=dacfifodepth)).io
+     dacfifo.enq.bits:=w_segmented
+     dacfifo.enq_clock:=io.interpolator_clocks.cic3clockfast
+     dacfifo.enq.valid:=true.B
+     dacfifo.enq_reset:=io.dsp_ioctrl.reset_dacfifo
+     dacfifo.deq_reset:=io.dsp_ioctrl.reset_dacfifo
+     dacfifo.deq_clock:=io.dac_clock
+     dacfifo.deq.ready:=true.B
     
-    io.Z.real:=w_outselect.real(n-1,n-outputn).asSInt
-    io.Z.imag:=w_outselect.imag(n-1,n-outputn).asSInt
+     io.Z:=dacfifo.deq.bits
     
 }
 //This gives you verilog
