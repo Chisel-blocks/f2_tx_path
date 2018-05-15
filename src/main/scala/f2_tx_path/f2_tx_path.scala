@@ -14,6 +14,11 @@ import f2_interpolator._
 import prog_delay._
 
 class segmented (val bin: Int=4, val thermo: Int=5)  extends Bundle {
+    val b =UInt(bin.W)
+    val t =UInt((scala.math.pow(2,thermo).toInt-1).W)
+}
+
+class segmented_bool (val bin: Int=4, val thermo: Int=5)  extends Bundle {
     val b =Vec(bin,Bool())
     val t =Vec(scala.math.pow(2,thermo).toInt-1,Bool())
 }
@@ -21,6 +26,10 @@ class segmented (val bin: Int=4, val thermo: Int=5)  extends Bundle {
 class dac_io (val bin: Int=4, val thermo: Int=5) extends Bundle {
     val real=new segmented(bin=bin,thermo=thermo) 
     val imag=new segmented(bin=bin,thermo=thermo)
+}
+class dac_io_bool (val bin: Int=4, val thermo: Int=5) extends Bundle {
+    val real=new segmented_bool(bin=bin,thermo=thermo) 
+    val imag=new segmented_bool(bin=bin,thermo=thermo)
 }
 
 class tx_path_dsp_ioctrl (
@@ -175,7 +184,7 @@ class f2_tx_path (
      realthermoind:=w_outselect.real(thermo+bin-1,bin)
      imagthermoind:=w_outselect.imag(thermo+bin-1,bin)
      //val w_segmented=withClock(io.interpolator_clocks.cic3clockfast){Reg(new dac_io(bin=bin,thermo=thermo))}
-     val w_segmented=Wire(new dac_io(bin=bin,thermo=thermo))
+     val w_segmented=Wire(new dac_io_bool(bin=bin,thermo=thermo))
      w_segmented.real.b:=r_lutoutdata.real(bin-1,0).toBools
      w_segmented.imag.b:=r_lutoutdata.imag(bin-1,0).toBools
 
@@ -195,10 +204,13 @@ class f2_tx_path (
      val dacfifodepth=16
      val fifoproto=new dac_io(bin=bin,thermo=thermo)
      val dacfifo = Module (new AsyncQueue(fifoproto,depth=dacfifodepth)).io
-     dacfifo.enq.bits:=w_segmented
      dacfifo.enq_clock:=io.interpolator_clocks.cic3clockfast
      dacfifo.enq.valid:=true.B
      dacfifo.enq_reset:=io.dsp_ioctrl.reset_dacfifo
+     dacfifo.enq.bits.real.t:=w_segmented.real.t.asUInt
+     dacfifo.enq.bits.real.b:=w_segmented.real.b.asUInt
+     dacfifo.enq.bits.imag.t:=w_segmented.imag.t.asUInt
+     dacfifo.enq.bits.imag.b:=w_segmented.imag.b.asUInt
      dacfifo.deq_reset:=io.dsp_ioctrl.reset_dacfifo
      dacfifo.deq_clock:=io.dac_clock
      dacfifo.deq.ready:=true.B
