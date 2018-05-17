@@ -189,12 +189,12 @@ class f2_tx_path (
      w_segmented.imag.b:=r_lutoutdata.imag(bin-1,0).toBools
 
      for (i <- 0 to w_segmented.real.t.getWidth-1){
-        when(realthermoind <= i.asUInt ) {
+        when(i.asUInt <  realthermoind ) {
             w_segmented.real.t(i):=true.B
         }.otherwise {
             w_segmented.real.t(i):=false.B
         }
-        when(imagthermoind <= i.asUInt ) {
+        when(  i.asUInt <=  imagthermoind) {
             w_segmented.imag.t(i):=true.B
         }.otherwise {
             w_segmented.imag.t(i):=false.B
