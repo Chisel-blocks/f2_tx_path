@@ -56,6 +56,7 @@ class tx_path_dsp_ioctrl (
 }
 
 // How to extract the "resolution" of a type?
+// Clock is slow, and the slow clock is the interpolators master clock
 class f2_tx_path_io (
         val outputn   : Int=9, 
         val bin       : Int=4,
