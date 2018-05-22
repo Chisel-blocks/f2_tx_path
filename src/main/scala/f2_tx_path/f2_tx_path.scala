@@ -185,8 +185,8 @@ class f2_tx_path (
      imagthermoind:=w_outselect.imag(thermo+bin-1,bin)
      //val w_segmented=withClock(io.interpolator_clocks.cic3clockfast){Reg(new dac_io(bin=bin,thermo=thermo))}
      val w_segmented=Wire(new dac_io_bool(bin=bin,thermo=thermo))
-     w_segmented.real.b:=r_lutoutdata.real(bin-1,0).toBools
-     w_segmented.imag.b:=r_lutoutdata.imag(bin-1,0).toBools
+     w_segmented.real.b:=w_outselect.real(bin-1,0).toBools
+     w_segmented.imag.b:=w_outselect.imag(bin-1,0).toBools
 
      for (i <- 0 to w_segmented.real.t.getWidth-1){
         when(i.asUInt <  realthermoind ) {
