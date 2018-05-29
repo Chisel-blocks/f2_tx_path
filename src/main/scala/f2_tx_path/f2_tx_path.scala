@@ -134,8 +134,8 @@ class f2_tx_path (
      dacdelay.select<>io.dsp_ioctrl.fine_delays
 
      ////DAC lookup tables
-     val daclut_real= SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))
-     val daclut_imag= SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))
+     val daclut_real= withClock(io.interpolator_clocks.cic3clockfast){SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))}
+     val daclut_imag= withClock(io.interpolator_clocks.cic3clockfast){SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))}
      val r_lutoutdata= withClock(io.interpolator_clocks.cic3clockfast){ 
          RegInit(DspComplex.wire(0.S(outputn.W),0.S(outputn.W)))
      }
@@ -186,8 +186,8 @@ class f2_tx_path (
      imagthermoind:=w_outselect.imag(thermo+bin-1,bin)
      //val w_segmented=withClock(io.interpolator_clocks.cic3clockfast){Reg(new dac_io(bin=bin,thermo=thermo))}
      val w_segmented=Wire(new dac_io_bool(bin=bin,thermo=thermo))
-     w_segmented.real.b:=r_lutoutdata.real(bin-1,0).toBools
-     w_segmented.imag.b:=r_lutoutdata.imag(bin-1,0).toBools
+     w_segmented.real.b:=w_outselect.real(bin-1,0).toBools
+     w_segmented.imag.b:=w_outselect.imag(bin-1,0).toBools
 
      for (i <- 0 to w_segmented.real.t.getWidth-1){
         when(i.asUInt <  realthermoind ) {
