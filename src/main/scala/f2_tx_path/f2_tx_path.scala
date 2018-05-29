@@ -134,8 +134,8 @@ class f2_tx_path (
      dacdelay.select<>io.dsp_ioctrl.fine_delays
 
      ////DAC lookup tables
-     val daclut_real= SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))
-     val daclut_imag= SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))
+     val daclut_real= withClock(io.interpolator_clocks.cic3clockfast){SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))}
+     val daclut_imag= withClock(io.interpolator_clocks.cic3clockfast){SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))}
      val r_lutoutdata= withClock(io.interpolator_clocks.cic3clockfast){ 
          RegInit(DspComplex.wire(0.S(outputn.W),0.S(outputn.W)))
      }
