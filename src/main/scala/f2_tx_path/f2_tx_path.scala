@@ -69,7 +69,7 @@ class f2_tx_path_io (
         val weightbits: Int=10
     ) extends Bundle {
     val interpolator_clocks   = new f2_interpolator_clocks()
-    val interpolator_controls = new f2_interpolator_controls(gainbits=10)
+    val interpolator_controls = new f2_interpolator_controls(resolution=resolution,gainbits=10)
     val dsp_ioctrl            = Input(new tx_path_dsp_ioctrl(outputn=outputn, n=n,
                                         users=users,progdelay=progdelay,
                                         finedelay=finedelay,weightbits=weightbits))
@@ -84,6 +84,7 @@ class f2_tx_path (
         bin       : Int=4,
         outputn   : Int=9, 
         n         : Int=16, 
+        resolution: Int=32, 
         users     : Int=4,
         progdelay : Int=64,
         finedelay : Int=32,
@@ -122,7 +123,7 @@ class f2_tx_path (
     }
      
      //Then interpolate
-     val interpolator  = Module ( new  f2_interpolator (n=n, resolution=32, coeffres=16, gainbits=10)).io
+     val interpolator  = Module ( new  f2_interpolator (n=n, resolution=resolution, coeffres=16, gainbits=10)).io
      io.interpolator_controls<>interpolator.controls
      io.interpolator_clocks<>interpolator.clocks
      interpolator.iptr_A:=userssum
