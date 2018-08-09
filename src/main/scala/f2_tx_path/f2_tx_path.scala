@@ -153,8 +153,8 @@ class f2_tx_path (
          daclut_imag.write(io.dsp_ioctrl.dac_lut_write_addr,io.dsp_ioctrl.dac_lut_write_val.imag)
      } 
      .otherwise {
-         r_lutoutdata.real:=daclut_real.read(r_lutreadaddress.real.asUInt)
-         r_lutoutdata.imag:=daclut_imag.read(r_lutreadaddress.imag.asUInt)
+         r_lutoutdata.real:=withClock(io.interpolator_clocks.cic3clockfast){daclut_real.read(r_lutreadaddress.real.asUInt)}
+         r_lutoutdata.imag:=withClock(io.interpolator_clocks.cic3clockfast){daclut_imag.read(r_lutreadaddress.imag.asUInt)}
      }
 
      //TX input assignments        
@@ -181,8 +181,8 @@ class f2_tx_path (
         w_outselect:=r_lutoutdata
     }
 
-     val realthermoind=Reg(UInt(thermo.W))
-     val imagthermoind=Reg(UInt(thermo.W))
+     val realthermoind=Wire(UInt(thermo.W))
+     val imagthermoind=Wire(UInt(thermo.W))
      realthermoind:=w_outselect.real(thermo+bin-1,bin)
      imagthermoind:=w_outselect.imag(thermo+bin-1,bin)
      //val w_segmented=withClock(io.interpolator_clocks.cic3clockfast){Reg(new dac_io(bin=bin,thermo=thermo))}
