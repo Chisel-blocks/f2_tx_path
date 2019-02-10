@@ -39,8 +39,8 @@ class tx_path_dsp_ioctrl (
         val n         : Int=16,
         val users     : Int=4,
         val weightbits: Int=10,
-        val progdelay : Int=64,
-        val finedelay : Int=32
+        val progdelay : Int=63,
+        val finedelay : Int=31
 
     ) extends Bundle {
         val dac_data_mode      = UInt(3.W)
@@ -63,8 +63,8 @@ class f2_tx_path_io (
         val thermo    : Int=5,
         val n         : Int=16,  
         val users     : Int=4,
-        val progdelay : Int=64,
-        val finedelay : Int=32,
+        val progdelay : Int=63,
+        val finedelay : Int=31,
         val resolution: Int=32,
         val weightbits: Int=10
     ) extends Bundle {
@@ -86,8 +86,8 @@ class f2_tx_path (
         n         : Int=16, 
         resolution: Int=32, 
         users     : Int=4,
-        progdelay : Int=64,
-        finedelay : Int=32,
+        progdelay : Int=63,
+        finedelay : Int=31,
         weightbits: Int=10
     ) extends Module {
     val io = IO( new f2_tx_path_io(thermo=thermo,bin=bin,
