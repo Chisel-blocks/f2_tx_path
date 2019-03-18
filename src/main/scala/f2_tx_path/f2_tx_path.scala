@@ -12,6 +12,7 @@ import dsptools.numbers._
 import freechips.rocketchip.util._
 import f2_interpolator._
 import prog_delay._
+import clkmux._
 
 class segmented (val bin: Int=4, val thermo: Int=5)  extends Bundle {
     val b =UInt(bin.W)
@@ -123,7 +124,12 @@ class f2_tx_path (
     }
      
      //Then interpolate
-     val interpolator  = Module ( new  f2_interpolator (n=n, resolution=resolution, coeffres=16, gainbits=10)).io
+     val interpolator_reset=Wire(Bool())
+     val interpolator  = withReset(interpolator_reset)(
+         Module ( 
+             new  f2_interpolator (n=n, resolution=resolution, coeffres=16, gainbits=10)
+         ).io
+     )
      io.interpolator_controls<>interpolator.controls
      io.interpolator_clocks<>interpolator.clocks
      interpolator.iptr_A:=userssum
@@ -161,12 +167,23 @@ class f2_tx_path (
 
     //Output selection wire
     val w_outselect = Wire(sigproto)
+    // Clock multiplexer for bypass
+    val input_clockmux=Module(new clkmux()).io
+
     //Default assignment
+    input_clockmux.c0:=(io.clock_symrate)
+    input_clockmux.c1:=(io.interpolator_clocks.cic3clockfast)
+    input_clockmux.sel:=false.B
+    interpolator_reset:=reset.toBool()
     w_outselect:=r_lutoutdata
+
+    //Modes
     when (io.dsp_ioctrl.dac_data_mode===0.U){
-        w_outselect:=withClock(io.dac_clock){RegNext(
+        input_clockmux.sel:=true.B
+        w_outselect:=withClock(io.interpolator_clocks.cic3clockfast){RegNext(
             io.iptr_A(io.dsp_ioctrl.user_select_index)
         )}
+        interpolator_reset:=true.B
     }.elsewhen (io.dsp_ioctrl.dac_data_mode===1.U){
         w_outselect:=userdelay(io.dsp_ioctrl.user_select_index).optr_Z
     }.elsewhen (io.dsp_ioctrl.dac_data_mode===2.U){
