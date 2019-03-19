@@ -77,6 +77,7 @@ class f2_tx_path_io (
     val dac_clock     = Input(Clock())
     val clock_symrate = Input(Clock()) 
     val iptr_A        = Input(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
+    val bypass_input  = Input(DspComplex(SInt(n.W), SInt(n.W)))
     val Z             = Output(new dac_io(bin=bin,thermo=thermo)) 
 }
 
@@ -179,9 +180,8 @@ class f2_tx_path (
 
     //Modes
     when (io.dsp_ioctrl.dac_data_mode===0.U){
-        input_clockmux.sel:=true.B
         w_outselect:=withClock(io.interpolator_clocks.cic3clockfast){RegNext(
-            io.iptr_A(io.dsp_ioctrl.user_select_index)
+            io.bypass_input
         )}
         interpolator_reset:=true.B
     }.elsewhen (io.dsp_ioctrl.dac_data_mode===1.U){
