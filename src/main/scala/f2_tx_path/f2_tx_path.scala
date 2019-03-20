@@ -107,7 +107,8 @@ class f2_tx_path (
     (userdelay,io.iptr_A).zipped.map(_.iptr_A:=_)
     (userdelay,io.dsp_ioctrl.user_delays).zipped.map(_.select:=_)
     //Add some modes here if needed
-
+    
+    //TODO handle dynamic range
     val weighted_users=withClock(io.clock_symrate){
         Reg(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
     }
