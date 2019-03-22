@@ -109,13 +109,43 @@ class f2_tx_path (
     //Add some modes here if needed
     
     //TODO handle dynamic range
-    val weighted_users=withClock(io.clock_symrate){
-        Reg(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
+    // Must extend the widths to the RESULT WIDTH before multiplication
+    val weighted_users=Seq.fill(users){
+        withClock(io.clock_symrate){
+            Reg(DspComplex(SInt(n.W), SInt(n.W)))
+        }
     }
-    ( weighted_users, 
-        ( userdelay,io.dsp_ioctrl.user_weights
-        ).zipped.map( _.optr_Z * _)
-    ).zipped.map(_:=_)
+    val w_weights=Seq.fill(users){
+        // Integer part is just the sign
+        Wire(DspComplex(
+            FixedPoint((n+weightbits).W,(weightbits-1).BP),
+            FixedPoint((weightbits).W,(weightbits-1).BP)
+        ))
+    }
+    val w_delays=Seq.fill(users){
+        // Sum of fractional bits must eventually equal weightbits after multiplication
+        Wire(DspComplex(FixedPoint((n+weightbits).W,1.BP),FixedPoint(n.W,1.BP)))
+    }
+
+    val w_weighted_users=Seq.fill(users){
+        // Sum of fractional bits must eventually equal weightbits after multiplication
+        Wire(DspComplex(
+            FixedPoint((n+weightbits).W,(weightbits).BP),
+            FixedPoint((n+weightbits).W,(weightbits).BP)
+        ))
+    }
+    for (i <- 0 until users) {
+        w_weights(i).real:=io.dsp_ioctrl.user_weights(i).real
+            .asFixedPoint((weightbits-1).BP)
+        w_weights(i).imag:=io.dsp_ioctrl.user_weights(i).imag
+            .asFixedPoint((weightbits-1).BP)
+        w_delays(i).real:=userdelay(i).optr_Z.real.asFixedPoint(1.BP)
+        w_delays(i).imag:=userdelay(i).optr_Z.imag.asFixedPoint(1.BP)
+        w_weighted_users(i):= w_delays(i) * w_weights(i) 
+        weighted_users(i).real:=w_weighted_users(i).real.floor.asSInt 
+        weighted_users(i).imag:=w_weighted_users(i).imag.floor.asSInt 
+
+    }
     
     //Sum the user data. TODO: add the real signal processing here
     val userssum=Wire(sigproto)
@@ -129,7 +159,8 @@ class f2_tx_path (
      val interpolator_reset=Wire(Bool())
      val interpolator  = withReset(interpolator_reset)(
          Module ( 
-             new  f2_interpolator (n=n, resolution=resolution, coeffres=16, gainbits=10)
+             new  f2_interpolator (
+                 n=n, resolution=resolution, coeffres=16, gainbits=10)
          ).io
      )
      io.interpolator_controls<>interpolator.controls
@@ -143,8 +174,12 @@ class f2_tx_path (
      dacdelay.select<>io.dsp_ioctrl.fine_delays
 
      ////DAC lookup tables
-     val daclut_real= withClock(io.interpolator_clocks.cic3clockfast){SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))}
-     val daclut_imag= withClock(io.interpolator_clocks.cic3clockfast){SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))}
+     val daclut_real= withClock(io.interpolator_clocks.cic3clockfast){
+         SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))
+     }
+     val daclut_imag= withClock(io.interpolator_clocks.cic3clockfast){
+         SyncReadMem(scala.math.pow(2,outputn).toInt,SInt(outputn.W))
+     }
      val r_lutoutdata= withClock(io.interpolator_clocks.cic3clockfast){ 
          RegInit(DspComplex.wire(0.S(outputn.W),0.S(outputn.W)))
      }
