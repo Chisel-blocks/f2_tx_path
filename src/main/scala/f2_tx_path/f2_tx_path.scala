@@ -56,8 +56,7 @@ class tx_path_dsp_ioctrl (
         val reset_dacfifo      = Bool()
 }
 
-// How to extract the "resolution" of a type?
-// Clock is slow, and the slow clock is the interpolators master clock
+// Clock is fast, and the fast clock is the interpolators master clock
 class f2_tx_path_io (
         val outputn   : Int=9, 
         val bin       : Int=4,
@@ -116,14 +115,17 @@ class f2_tx_path (
         }
     }
     val w_weights=Seq.fill(users){
-        // Integer part is just the sign
-        Wire(DspComplex(
-            FixedPoint((n+weightbits).W,(weightbits-1).BP),
-            FixedPoint((weightbits).W,(weightbits-1).BP)
-        ))
+        // sync the static Io to symrate)
+        withClock(io.clock_symrate){
+            Reg(DspComplex(
+                FixedPoint((n+weightbits).W,(weightbits-1).BP),
+                FixedPoint((weightbits).W,(weightbits-1).BP)
+            ))
+        }
     }
     val w_delays=Seq.fill(users){
         // Sum of fractional bits must eventually equal weightbits after multiplication
+        // Already synced
         Wire(DspComplex(FixedPoint((n+weightbits).W,1.BP),FixedPoint(n.W,1.BP)))
     }
 
@@ -190,8 +192,8 @@ class f2_tx_path (
      r_lutreadaddress.real:=dacdelay.optr_Z.real(n-1,n-outputn).asSInt
      r_lutreadaddress.imag:=dacdelay.optr_Z.imag(n-1,n-outputn).asSInt
      
-     //Enabled read
-     when (io.dsp_ioctrl.dac_lut_write_en===true.B) {
+     //Enabled read, sync control to master clock
+     when (RegNext(io.dsp_ioctrl.dac_lut_write_en)===true.B) {
          daclut_real.write(io.dsp_ioctrl.dac_lut_write_addr,io.dsp_ioctrl.dac_lut_write_val.real)
          daclut_imag.write(io.dsp_ioctrl.dac_lut_write_addr,io.dsp_ioctrl.dac_lut_write_val.imag)
      } 
@@ -208,29 +210,30 @@ class f2_tx_path (
     val input_clockmux=Module(new clkmux()).io
 
     //Default assignment
-    input_clockmux.c0:=(io.clock_symrate)
-    input_clockmux.c1:=(io.interpolator_clocks.cic3clockfast)
+    input_clockmux.c0:=io.clock_symrate
+    input_clockmux.c1:=clock
     input_clockmux.sel:=false.B
     interpolator_reset:=reset.toBool()
     w_outselect:=r_lutoutdata
 
-    //Modes
-    when (io.dsp_ioctrl.dac_data_mode===0.U){
-        w_outselect:=withClock(io.interpolator_clocks.cic3clockfast){RegNext(
-            io.bypass_input
-        )}
+    //Modes, register controls with the master clock
+    val r_dac_data_mode=RegInit(0.U.asTypeOf(io.dsp_ioctrl.dac_data_mode))
+    val r_user_select_index=RegInit(0.U.asTypeOf(io.dsp_ioctrl.user_select_index))
+    r_dac_data_mode:=io.dsp_ioctrl.dac_data_mode
+    when (r_dac_data_mode===0.U){
+        w_outselect:=RegNext(io.bypass_input)
         interpolator_reset:=true.B
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===1.U){
-        w_outselect:=userdelay(io.dsp_ioctrl.user_select_index).optr_Z
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===2.U){
-        w_outselect:=weighted_users(io.dsp_ioctrl.user_select_index)
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===3.U){
+    }.elsewhen (r_dac_data_mode===1.U){
+        w_outselect:=userdelay(r_user_select_index).optr_Z
+    }.elsewhen (r_dac_data_mode===2.U){
+        w_outselect:=weighted_users(r_user_select_index)
+    }.elsewhen (r_dac_data_mode===4.U){
         w_outselect:=userssum
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===4.U){
+    }.elsewhen (r_dac_data_mode===4.U){
         w_outselect:=interpolator.Z
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===5.U){
+    }.elsewhen (r_dac_data_mode===5.U){
         w_outselect:=dacdelay.optr_Z
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===6.U){
+    }.elsewhen (r_dac_data_mode===6.U){
         w_outselect:=r_lutoutdata
     }
 
@@ -238,7 +241,6 @@ class f2_tx_path (
      val imagthermoind=Wire(UInt(thermo.W))
      realthermoind:=w_outselect.real(thermo+bin-1,bin)
      imagthermoind:=w_outselect.imag(thermo+bin-1,bin)
-     //val w_segmented=withClock(io.interpolator_clocks.cic3clockfast){Reg(new dac_io(bin=bin,thermo=thermo))}
      val w_segmented=Wire(new dac_io_bool(bin=bin,thermo=thermo))
      w_segmented.real.b:=w_outselect.real(bin-1,0).toBools
      w_segmented.imag.b:=w_outselect.imag(bin-1,0).toBools
@@ -259,7 +261,7 @@ class f2_tx_path (
      val dacfifodepth=16
      val fifoproto=new dac_io(bin=bin,thermo=thermo)
      val dacfifo = Module (new AsyncQueue(fifoproto,depth=dacfifodepth)).io
-     dacfifo.enq_clock:=io.interpolator_clocks.cic3clockfast
+     dacfifo.enq_clock:=clock
      dacfifo.enq.valid:=true.B
      dacfifo.enq_reset:=io.dsp_ioctrl.reset_dacfifo
      dacfifo.enq.bits.real.t:=w_segmented.real.t.asUInt
