@@ -76,7 +76,10 @@ class f2_tx_path_io (
     val dac_clock     = Input(Clock())
     val clock_symrate = Input(Clock()) 
     val iptr_A        = Input(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
-    val bypass_input  = Input(DspComplex(SInt(n.W), SInt(n.W)))
+    val bypass_input  = Input(Vec(users,DspComplex(SInt(n.W), SInt(n.W))))
+    val bypass_Ndiv   = Input(UInt(8.W)) //Division at maximum with nuber of users
+                                         // Consistent with the clockdivider
+    val bypass_clock  = Input(Clock())  //Clock for bypass mode
     val Z             = Output(new dac_io(bin=bin,thermo=thermo)) 
 }
 
@@ -107,7 +110,6 @@ class f2_tx_path (
     (userdelay,io.dsp_ioctrl.user_delays).zipped.map(_.select:=_)
     //Add some modes here if needed
     
-    //TODO handle dynamic range
     // Must extend the widths to the RESULT WIDTH before multiplication
     val weighted_users=Seq.fill(users){
         withClock(io.clock_symrate){
@@ -192,48 +194,78 @@ class f2_tx_path (
      r_lutreadaddress.real:=dacdelay.optr_Z.real(n-1,n-outputn).asSInt
      r_lutreadaddress.imag:=dacdelay.optr_Z.imag(n-1,n-outputn).asSInt
      
-     //Enabled read, sync control to master clock
-     when (RegNext(io.dsp_ioctrl.dac_lut_write_en)===true.B) {
-         daclut_real.write(io.dsp_ioctrl.dac_lut_write_addr,io.dsp_ioctrl.dac_lut_write_val.real)
-         daclut_imag.write(io.dsp_ioctrl.dac_lut_write_addr,io.dsp_ioctrl.dac_lut_write_val.imag)
+     //Enabled read, sync to fast clock
+     when (
+         withClock(io.interpolator_clocks.cic3clockfast){
+             RegNext(io.dsp_ioctrl.dac_lut_write_en)}===true.B
+          ) {
+         daclut_real.write(
+             io.dsp_ioctrl.dac_lut_write_addr,
+             io.dsp_ioctrl.dac_lut_write_val.real
+         )
+         daclut_imag.write(
+             io.dsp_ioctrl.dac_lut_write_addr,
+             io.dsp_ioctrl.dac_lut_write_val.imag
+         )
      } 
      .otherwise {
-         r_lutoutdata.real:=withClock(io.interpolator_clocks.cic3clockfast){daclut_real.read(r_lutreadaddress.real.asUInt)}
-         r_lutoutdata.imag:=withClock(io.interpolator_clocks.cic3clockfast){daclut_imag.read(r_lutreadaddress.imag.asUInt)}
+         r_lutoutdata.real:=withClock(io.interpolator_clocks.cic3clockfast){
+             daclut_real.read(r_lutreadaddress.real.asUInt)
+         }
+         r_lutoutdata.imag:=withClock(io.interpolator_clocks.cic3clockfast){
+             daclut_imag.read(r_lutreadaddress.imag.asUInt)
+         }
      }
 
-     //TX input assignments        
-
+    //TX input assignments        
     //Output selection wire
     val w_outselect = Wire(sigproto)
-    // Clock multiplexer for bypass
-    val input_clockmux=Module(new clkmux()).io
 
     //Default assignment
-    input_clockmux.c0:=io.clock_symrate
-    input_clockmux.c1:=clock
-    input_clockmux.sel:=false.B
     interpolator_reset:=reset.toBool()
     w_outselect:=r_lutoutdata
 
-    //Modes, register controls with the master clock
-    val r_dac_data_mode=RegInit(0.U.asTypeOf(io.dsp_ioctrl.dac_data_mode))
-    val r_user_select_index=RegInit(0.U.asTypeOf(io.dsp_ioctrl.user_select_index))
-    r_dac_data_mode:=io.dsp_ioctrl.dac_data_mode
-    when (r_dac_data_mode===0.U){
-        w_outselect:=RegNext(io.bypass_input)
+    // Bypass methodology
+    val reset_bypass_register=Wire(Bool())
+    reset_bypass_register:=true.B
+    val bypass_serdes_register=withClockAndReset(
+            io.bypass_clock,reset_bypass_register
+        ){
+            RegInit(0.U.asTypeOf(io.bypass_input))
+        }
+
+    val bypass_counter=withReset(reset_bypass_register){
+        RegInit(0.U.asTypeOf(io.bypass_Ndiv))
+    }
+    //Count the index for the bypass mode cant exceed users
+    when ( bypass_counter < users) {
+        when ( bypass_counter < io.bypass_Ndiv-1.U) {
+            bypass_counter:=bypass_counter+1.U
+        } .otherwise {
+            bypass_counter:=0.U
+        }
+    } .otherwise {
+        bypass_counter:=0.U
+    }
+
+    //Modes asynchronous, NO need to sync false path 
+    when (io.dsp_ioctrl.dac_data_mode===0.U){
+        //mode 0 bypasses the interpolator
+        reset_bypass_register:=false.B
         interpolator_reset:=true.B
-    }.elsewhen (r_dac_data_mode===1.U){
-        w_outselect:=userdelay(r_user_select_index).optr_Z
-    }.elsewhen (r_dac_data_mode===2.U){
-        w_outselect:=weighted_users(r_user_select_index)
-    }.elsewhen (r_dac_data_mode===4.U){
+        bypass_serdes_register:=io.bypass_input
+        w_outselect:=RegNext(bypass_serdes_register(bypass_counter))
+    } .elsewhen (io.dsp_ioctrl.dac_data_mode===1.U){
+        w_outselect:=userdelay(io.dsp_ioctrl.user_select_index).optr_Z
+    }.elsewhen (io.dsp_ioctrl.dac_data_mode===2.U){
+        w_outselect:=weighted_users(io.dsp_ioctrl.user_select_index)
+    }.elsewhen (io.dsp_ioctrl.dac_data_mode===4.U){
         w_outselect:=userssum
-    }.elsewhen (r_dac_data_mode===4.U){
+    }.elsewhen (io.dsp_ioctrl.dac_data_mode===4.U){
         w_outselect:=interpolator.Z
-    }.elsewhen (r_dac_data_mode===5.U){
+    }.elsewhen (io.dsp_ioctrl.dac_data_mode===5.U){
         w_outselect:=dacdelay.optr_Z
-    }.elsewhen (r_dac_data_mode===6.U){
+    }.elsewhen (io.dsp_ioctrl.dac_data_mode===6.U){
         w_outselect:=r_lutoutdata
     }
 
