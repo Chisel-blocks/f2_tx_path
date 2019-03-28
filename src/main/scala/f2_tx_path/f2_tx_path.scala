@@ -283,7 +283,7 @@ class f2_tx_path (
         }.otherwise {
             w_segmented.real.t(i):=false.B
         }
-        when(  i.asUInt <=  imagthermoind) {
+        when(  i.asUInt <  imagthermoind) {
             w_segmented.imag.t(i):=true.B
         }.otherwise {
             w_segmented.imag.t(i):=false.B
