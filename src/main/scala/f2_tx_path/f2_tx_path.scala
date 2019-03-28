@@ -226,17 +226,22 @@ class f2_tx_path (
     w_outselect:=r_lutoutdata
 
     // Bypass methodology
-    val reset_bypass_register=Wire(Bool())
+    // Must sync the counter to bypass clock
+    val reset_bypass_register=withClock(io.bypass_clock){Reg(Bool())}
     reset_bypass_register:=true.B
     val bypass_serdes_register=withClockAndReset(
             io.bypass_clock,reset_bypass_register
         ){
             RegInit(0.U.asTypeOf(io.bypass_input))
         }
+    val bypass_serdes_serreg=withReset(reset_bypass_register){
+            RegInit(0.U.asTypeOf(w_outselect))
+        }
 
     val bypass_counter=withReset(reset_bypass_register){
         RegInit(0.U.asTypeOf(io.bypass_Ndiv))
     }
+
     //Count the index for the bypass mode cant exceed users
     when ( bypass_counter < users) {
         when ( bypass_counter < io.bypass_Ndiv-1.U) {
@@ -254,12 +259,13 @@ class f2_tx_path (
         reset_bypass_register:=false.B
         interpolator_reset:=true.B
         bypass_serdes_register:=io.bypass_input
-        w_outselect:=RegNext(bypass_serdes_register(bypass_counter))
+        bypass_serdes_serreg:=bypass_serdes_register(bypass_counter)
+        w_outselect:=bypass_serdes_serreg
     } .elsewhen (io.dsp_ioctrl.dac_data_mode===1.U){
         w_outselect:=userdelay(io.dsp_ioctrl.user_select_index).optr_Z
     }.elsewhen (io.dsp_ioctrl.dac_data_mode===2.U){
         w_outselect:=weighted_users(io.dsp_ioctrl.user_select_index)
-    }.elsewhen (io.dsp_ioctrl.dac_data_mode===4.U){
+    }.elsewhen (io.dsp_ioctrl.dac_data_mode===3.U){
         w_outselect:=userssum
     }.elsewhen (io.dsp_ioctrl.dac_data_mode===4.U){
         w_outselect:=interpolator.Z
