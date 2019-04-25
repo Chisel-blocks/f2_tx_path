@@ -1,9 +1,6 @@
 [submodule "f2_interpolator"]
 	path = f2_interpolator
 	url = git@bwrcrepo.eecs.berkeley.edu:dsp-blocks/chisel/f2_interpolator.git
-[submodule "rocket-chip"]
-	path = rocket-chip
-	url = https://github.com/freechipsproject/rocket-chip.git
 [submodule "prog_delay"]
 	path = prog_delay
 	url = git@bwrcrepo.eecs.berkeley.edu:fader2/chisel/prog_delay.git
