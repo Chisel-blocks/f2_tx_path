@@ -110,7 +110,7 @@ class f2_tx_path (
     (userdelay,io.dsp_ioctrl.user_delays).zipped.map(_.select:=_)
     //Add some modes here if needed
     
-    // Must extend the widths to the RESULT WIDTH before multiplication
+    // Must extend the widths by 1 before multiplication
     val weighted_users=Seq.fill(users){
         withClock(io.clock_symrate){
             Reg(DspComplex(SInt(n.W), SInt(n.W)))
@@ -120,15 +120,15 @@ class f2_tx_path (
         // sync the static Io to symrate)
         withClock(io.clock_symrate){
             Reg(DspComplex(
-                FixedPoint((n+weightbits).W,(weightbits-1).BP),
-                FixedPoint((weightbits).W,(weightbits-1).BP)
+                FixedPoint((weightbits+1).W,(weightbits-1).BP),
+                FixedPoint((weightbits+1).W,(weightbits-1).BP)
             ))
         }
     }
     val w_delays=Seq.fill(users){
         // Sum of fractional bits must eventually equal weightbits after multiplication
         // Already synced
-        Wire(DspComplex(FixedPoint((n+weightbits).W,1.BP),FixedPoint(n.W,1.BP)))
+        Wire(DspComplex(FixedPoint((n+1).W,1.BP),FixedPoint((n+1).W,1.BP)))
     }
 
     val w_weighted_users=Seq.fill(users){
