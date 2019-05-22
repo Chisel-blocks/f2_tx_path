@@ -1,9 +1,9 @@
 [submodule "f2_interpolator"]
 	path = f2_interpolator
-	url = git@bwrcrepo.eecs.berkeley.edu:dsp-blocks/chisel/f2_interpolator.git
+	url = git@github.com:Chisel-blocks/f2_interpolator.git
 [submodule "prog_delay"]
 	path = prog_delay
-	url = git@bwrcrepo.eecs.berkeley.edu:fader2/chisel/prog_delay.git
+	url = git@github.com:Chisel-blocks/prog_delay.git
 [submodule "clkmux"]
 	path = clkmux
-	url = git@bwrcrepo.eecs.berkeley.edu:dsp-blocks/chisel/clkmux.git
+	url = git@github.com:Chisel-blocks/clkmux.git
