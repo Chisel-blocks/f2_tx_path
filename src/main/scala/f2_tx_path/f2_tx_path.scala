@@ -4,7 +4,7 @@
 package f2_tx_path
 import chisel3._
 import chisel3.util._
-import chisel3.experimental._
+import chisel3.experimental.{FixedPoint,withClock, withReset, withClockAndReset}
 import dsptools._
 import dsptools.numbers._
 // Should I Use this or not? 
