@@ -6,9 +6,9 @@ organization := "edu.berkeley.cs"
 
 name := "f2_tx_path"
 
-version := scala.sys.process.Process("git rev-parse --short HEAD").!!.mkString.replaceAll("\\s", "")+"-SNAPSHOT"
+version := scala.sys.process.Process("git rev-parse --short HEAD").!!.mkString.replaceAll("\\s", "")
 
-scalaVersion := "2.11.11"
+scalaVersion := "2.12.3
 
 // [TODO] what are these needed for? remove if obsolete
 def scalacOptionsVersion(scalaVersion: String): Seq[String] = {
@@ -41,7 +41,7 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
 // for those modules not version controlled by Maven or equivalent
 def gitSubmoduleHashSnapshotVersion(submod: String): String = {
     val shellcommand =  "git submodule status | grep %s | awk '{print substr($1,0,7)}'".format(submod)
-    scala.sys.process.Process(Seq("/bin/sh", "-c", shellcommand )).!!.mkString.replaceAll("\\s", "")+"-SNAPSHOT"
+    scala.sys.process.Process(Seq("/bin/sh", "-c", shellcommand )).!!.mkString.replaceAll("\\s", "")
 }
 
 
@@ -61,17 +61,14 @@ resolvers += "Sonatype Releases" at "https://oss.sonatype.org/content/repositori
 // Provide a managed dependency on X if -DXVersion="" is supplied on the command line.
 // [TODO] is simpler clearer?
 val defaultVersions = Map(
-  "chisel3" -> "3.2-SNAPSHOT",
-  "chisel-iotesters" -> "1.2.5",
-  "dsptools" -> "1.1.4"
+  "chisel3" -> "3.1.7",
+  "chisel-iotesters" -> "1.2.9",
+  "dsptools" -> "1.1.8"
   )
 
 libraryDependencies ++= (Seq("chisel3","chisel-iotesters","dsptools").map {
   dep: String => "edu.berkeley.cs" %% dep % sys.props.getOrElse(dep + "Version", defaultVersions(dep)) })
 
-
-//This is (mainly) for TheSDK testbenches, may become obsolete
-libraryDependencies += "com.gilt" %% "handlebars-scala" % "2.1.1"
 
 libraryDependencies  ++= Seq(
 //  // Last stable release
@@ -90,11 +87,10 @@ libraryDependencies  ++= Seq(
 
 // Some common deps in BWRC projects, select if needed
 // TODO-how to figure out what version is the current and the best?
-libraryDependencies += "edu.berkeley.cs" %% "dsptools" % "1.1-SNAPSHOT"
-libraryDependencies += "berkeley" %% "rocketchip" % "1.2"
-libraryDependencies += "edu.berkeley.cs" %% "f2_interpolator" % gitSubmoduleHashSnapshotVersion("f2_interpolator")
-libraryDependencies += "edu.berkeley.cs" %% "clkmux" % gitSubmoduleHashSnapshotVersion("clkmux")
-libraryDependencies += "edu.berkeley.cs" %% "prog_delay" % gitSubmoduleHashSnapshotVersion("prog_delay")
+libraryDependencies += "edu.berkeley.cs" %% "rocketchip" % "1.2-031419-SNAPSHOT"
+libraryDependencies += "Chisel-blocks" %% "f2_interpolator" % gitSubmoduleHashSnapshotVersion("f2_interpolator")
+libraryDependencies += "Chisel-blocks" %% "clkmux" % gitSubmoduleHashSnapshotVersion("clkmux")
+libraryDependencies += "Chisel-blocks" %% "prog_delay" % gitSubmoduleHashSnapshotVersion("prog_delay")
 
 //libraryDependencies += "edu.berkeley.eecs" %% "ofdm" % "0.1"
 //libraryDependencies += "edu.berkeley.cs" %% "eagle_serdes" % "0.0-SNAPSHOT"
